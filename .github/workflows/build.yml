@@ -1,38 +1,38 @@
-name: Build exe
+name: Build Catch.exe
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # 手动触发
 
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v2
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v2
         with:
-          python-version: '3.x'  # 指定Python版本，确保和本地开发环境一致
+          python-version: '3.x'  # 使用适当的 Python 版本
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pyinstaller
+          pip install selenium openpyxl pandas pyinstaller
 
-      - name: Build EXE with PyInstaller
+      - name: Build Catch.py to EXE
         run: |
-          pyinstaller --noconsole --onefile catch.py
-        shell: bash
+          pyinstaller --onefile --noconsole Catch.py  # 将 Catch.py 打包为单个 EXE 文件，并隐藏 CMD 窗口
+        shell: cmd
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v3
+      - name: Archive the EXE
+        run: |
+          mkdir -p dist
+          copy dist\\Catch.exe dist\\Catch.exe
+
+      - name: Upload EXE as artifact
+        uses: actions/upload-artifact@v2
         with:
-          name: catch-exe
-          path: dist/catch.exe  # PyInstaller 默认输出目录为 dist
-
-      - name: Clean up
-        run: |
-          rmdir /s /q build dist __pycache__ catch.spec
+          name: Catch-exe
+          path: dist/Catch.exe
