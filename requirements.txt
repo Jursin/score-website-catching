@@ -1,0 +1,5 @@
+installer
+selenium
+pandas
+openpyxl
+pyqt5
