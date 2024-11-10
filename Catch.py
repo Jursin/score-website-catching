@@ -2,88 +2,160 @@ import sys
 import os
 import pandas as pd
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QCheckBox, QPushButton, QTextEdit, QFileDialog, QGroupBox, QFormLayout, QScrollArea
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtGui import QFont
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
+class SeleniumWorker(QThread):
+    update_console = pyqtSignal(str)
+    
+    def __init__(self, input_files, url, output_path, auto_name, manual_filename):
+        super().__init__()
+        self.input_files = input_files
+        self.url = url
+        self.output_path = output_path
+        self.auto_name = auto_name
+        self.manual_filename = manual_filename
+
+    def run(self):
+        output_data = []
+        driver = None
+        try:
+            driver = webdriver.Edge(executable_path='path/to/your/edgedriver')  # 更新为 WebDriver 的实际路径
+            driver.get(self.url)
+        except Exception as e:
+            self.update_console.emit(f"WebDriver 错误: {e}")
+            return
+
+        for input_file in self.input_files:
+            self.update_console.emit(f"处理文件: {input_file}")
+            df = pd.read_excel(input_file)
+            for index, row in df.iterrows():
+                try:
+                    data1 = row[1]
+                    data2 = str(row[2])[-4:]
+                    input1 = WebDriverWait(driver, 3).until(EC.presence_of_element_located((By.NAME, 's_xingming')))
+                    input2 = WebDriverWait(driver, 3).until(EC.presence_of_element_located((By.NAME, 's_chaxunma')))
+                    input1.clear()
+                    input2.clear()
+                    input1.send_keys(str(data1))
+                    input2.send_keys(str(data2))
+                    submit_button = WebDriverWait(driver, 3).until(EC.element_to_be_clickable((By.XPATH, '//button[contains(text(),"查询")]')))
+                    submit_button.click()
+                    WebDriverWait(driver, 3).until(EC.presence_of_element_located((By.CLASS_NAME, 'right_cell')))
+                    elements = driver.find_elements(By.CLASS_NAME, 'right_cell')
+                    output_values = [element.text for element in elements]
+                    output_data.append([data1, data2] + output_values)
+                except Exception as e:
+                    self.update_console.emit(f"Error processing row {index}: {e}")
+                    driver.get(self.url)
+                    continue
+                driver.get(self.url)
+
+        if output_data:
+            filename = self.manual_filename if not self.auto_name else str(output_data[0][2]) + "班.xlsx"
+            output_file = os.path.join(self.output_path, filename)
+            pd.DataFrame(output_data).to_excel(output_file, index=False)
+            self.update_console.emit(f"文件已保存: {output_file}")
+
+        if driver:
+            driver.quit()
+
 class MyApp(QWidget):
     def __init__(self):
         super().__init__()
-        self.selected_files = []  # 用于存储选择的文件路径
+        self.selected_files = []
         self.initUI()
 
     def initUI(self):
-        # 主布局
+        font = QFont()
+        font.setPointSize(12)
+        self.setFont(font)
+        
         main_layout = QVBoxLayout()
+        main_layout.setSpacing(15)
 
-        # 输入文件路径选择
+        # 输入文件夹选择布局
         input_layout = QHBoxLayout()
         self.input_file_edit = QLineEdit(self)
+        self.input_file_edit.setFixedHeight(30)
         input_button = QPushButton("选择输入文件夹", self)
-        input_button.clicked.connect(self.select_input_folder)  # 选择文件夹
+        input_button.setFixedSize(150, 40)
+        input_button.clicked.connect(self.select_input_folder)
         input_layout.addWidget(QLabel("输入文件夹:"))
         input_layout.addWidget(self.input_file_edit)
         input_layout.addWidget(input_button)
 
-        # 创建文件显示区域
+        # Excel 文件列表布局
         self.file_list_groupbox = QGroupBox("Excel 文件列表")
         self.file_list_layout = QFormLayout()
         self.file_list_groupbox.setLayout(self.file_list_layout)
 
-        # 可滚动的区域，并限制其大小
         scroll_area = QScrollArea()
         scroll_area.setWidget(self.file_list_groupbox)
-        scroll_area.setWidgetResizable(True)  # 让QScrollArea根据内容自动调整大小
-        scroll_area.setFixedHeight(150)  # 限制显示区域的高度
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)  # 禁用水平滚动条
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFixedHeight(200)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
-        # 输入文件夹选择
         main_layout.addLayout(input_layout)
-        main_layout.addWidget(scroll_area)  # 将文件列表滚动区域嵌入布局中
+        main_layout.addWidget(scroll_area)
 
-        # 输出文件路径
+        # 输出文件路径布局
         output_layout = QHBoxLayout()
         self.output_file_edit = QLineEdit(self)
+        self.output_file_edit.setFixedHeight(30)
         output_button = QPushButton("选择输出路径", self)
+        output_button.setFixedSize(150, 40)
         output_button.clicked.connect(self.select_output_path)
         output_layout.addWidget(QLabel("输出文件路径:"))
         output_layout.addWidget(self.output_file_edit)
         output_layout.addWidget(output_button)
 
-        # 自动更改文件名勾选框
+        # 自动生成文件名复选框和手动输入文件名框布局
+        filename_layout = QHBoxLayout()
+        
         self.auto_name_checkbox = QCheckBox("自动更改文件名", self)
+        self.auto_name_checkbox.setFixedHeight(30)
         self.auto_name_checkbox.toggled.connect(self.auto_generate_filename)
-
-        # 手动修改文件名文本框
+        
         self.manual_filename_edit = QLineEdit(self)
-        self.manual_filename_edit.setPlaceholderText("手动输入文件名（如果没有勾选自动更改）")
+        self.manual_filename_edit.setPlaceholderText("手动输入文件名")
+        self.manual_filename_edit.setFixedHeight(30)
+        
+        filename_layout.addWidget(self.auto_name_checkbox)
+        filename_layout.addWidget(self.manual_filename_edit)
 
-        # URL 输入框
+        # 输入网址和运行按钮布局
+        url_layout = QHBoxLayout()
         self.url_edit = QLineEdit(self)
         self.url_edit.setPlaceholderText("请输入网址")
+        self.url_edit.setFixedHeight(30)
 
-        # 运行按钮
         run_button = QPushButton("运行", self)
+        run_button.setFixedSize(100, 40)
         run_button.clicked.connect(self.run_process)
 
-        # 控制台输出
+        url_layout.addWidget(self.url_edit)
+        url_layout.addWidget(run_button)
+
+        # 控制台输出区域
         self.console_output = QTextEdit(self)
         self.console_output.setReadOnly(True)
+        self.console_output.setFixedHeight(200)
 
-        # 添加布局
+        # 添加布局到主布局
         main_layout.addLayout(output_layout)
-        main_layout.addWidget(self.manual_filename_edit)
-        main_layout.addWidget(self.auto_name_checkbox)
-        main_layout.addWidget(self.url_edit)
-        main_layout.addWidget(run_button)
+        main_layout.addLayout(filename_layout)
+        main_layout.addLayout(url_layout)
         main_layout.addWidget(self.console_output)
 
-        # 设置窗口属性
+        # 窗口设置
         self.setLayout(main_layout)
         self.setWindowTitle('数据抓取工具')
-        self.setGeometry(100, 100, 600, 500)
+        self.setGeometry(100, 100, 800, 600)
         self.show()
 
     def select_input_folder(self):
@@ -93,20 +165,17 @@ class MyApp(QWidget):
             self.load_files_in_folder(folder_name)
 
     def load_files_in_folder(self, folder_name):
-        # 清空当前显示的文件列表
         for i in reversed(range(self.file_list_layout.count())):
             widget = self.file_list_layout.itemAt(i).widget()
             if widget is not None:
                 widget.deleteLater()
 
-        # 获取文件夹中的所有 Excel 文件
         excel_files = [f for f in os.listdir(folder_name) if f.endswith(('.xlsx', '.xls'))]
-        self.checkboxes = []  # 用于存储所有勾选框
-
+        self.checkboxes = []
         for file in excel_files:
             checkbox = QCheckBox(file)
-            self.checkboxes.append((checkbox, os.path.join(folder_name, file)))  # 存储勾选框和文件路径的元组
-            self.file_list_layout.addRow(checkbox)  # 添加到文件列表显示区域
+            self.checkboxes.append((checkbox, os.path.join(folder_name, file)))
+            self.file_list_layout.addRow(checkbox)
 
     def select_output_path(self):
         folder_name = QFileDialog.getExistingDirectory(self, "选择输出文件夹")
@@ -116,9 +185,9 @@ class MyApp(QWidget):
     def auto_generate_filename(self):
         if self.auto_name_checkbox.isChecked():
             self.console_output.append("自动生成文件名已启用。")
-            self.manual_filename_edit.setDisabled(True)  # 禁用手动修改文件名框
+            self.manual_filename_edit.hide()
         else:
-            self.manual_filename_edit.setDisabled(False)  # 恢复手动修改文件名框
+            self.manual_filename_edit.show()
 
     def run_process(self):
         selected_files = [file for checkbox, file in self.checkboxes if checkbox.isChecked()]
@@ -126,86 +195,14 @@ class MyApp(QWidget):
             self.console_output.append("没有选择任何文件.")
             return
 
-        output_file = self.output_file_edit.text()
+        url = self.url_edit.text()
+        output_path = self.output_file_edit.text()
+        auto_name = self.auto_name_checkbox.isChecked()
+        manual_filename = self.manual_filename_edit.text()
 
-        # 如果没有勾选自动更改文件名，则使用手动输入的文件名
-        if not self.auto_name_checkbox.isChecked():
-            output_file = os.path.join(os.path.dirname(output_file), self.manual_filename_edit.text())
-
-        # 显示控制台输出
-        self.console_output.append("开始处理...")
-
-        # 批量处理选中的文件
-        for input_file in selected_files:
-            self.console_output.append(f"正在处理: {input_file}")
-            self.process_data(input_file, output_file)
-
-    def process_data(self, input_file, output_file):
-        # 读取 Excel 文件
-        df = pd.read_excel(input_file)
-        self.console_output.append(f"读取输入文件: {input_file}")
-
-        # 初始化 WebDriver（假设使用 Chrome）
-        try:
-            driver = webdriver.Edge()
-        except Exception as e:
-            self.console_output.append(f"WebDriver 错误: {e}")
-            return
-
-        driver.get(self.url_edit.text())  # 从UI获取网址
-
-        # 存储抓取到的数据
-        output_data = []
-
-        # 循环读取每一行的数据
-        for index, row in df.iterrows():
-            data1 = row[1]  # 从 Excel 表格中读取第二列的值
-            data2 = str(row[2])[-4:]  # 从 Excel 表格中读取第三列的后四位
-            
-            try:
-                # 使用显式等待定位输入框，超时设为3秒
-                input1 = WebDriverWait(driver, 3).until(EC.presence_of_element_located((By.NAME, 's_xingming')))
-                input2 = WebDriverWait(driver, 3).until(EC.presence_of_element_located((By.NAME, 's_chaxunma')))
-
-                # 清除输入框中的内容
-                input1.clear()
-                input2.clear()
-
-                # 将数据输入到输入框
-                input1.send_keys(str(data1))
-                input2.send_keys(str(data2))
-
-                # 定位查询按钮并点击
-                submit_button = WebDriverWait(driver, 3).until(EC.element_to_be_clickable((By.XPATH, '//button[contains(text(),"查询")]')))
-                submit_button.click()
-
-                # 等待页面加载新的数据
-                WebDriverWait(driver, 3).until(EC.presence_of_element_located((By.CLASS_NAME, 'right_cell')))
-
-                # 抓取输出并保存
-                elements = driver.find_elements(By.CLASS_NAME, 'right_cell')
-                output_values = [element.text for element in elements]
-                output_data.append([data1, data2] + output_values)
-
-            except Exception as e:
-                self.console_output.append(f"Error processing row {index}: {e}")
-                driver.get(self.url_edit.text())  # 错误时重新加载页面
-                continue
-
-            driver.get(self.url_edit.text())  # 完成后返回原始页面
-
-        # 在数据抓取完成后生成文件名（第二列第一行的值）
-        if output_data:
-            new_filename = str(output_data[0][2]) + "班.xlsx"  # 使用抓取的第二列的值作为文件名
-            output_file = os.path.join(os.path.dirname(output_file), new_filename)
-            self.console_output.append(f"新的输出文件名: {output_file}")
-
-            # 保存输出数据
-            output_df = pd.DataFrame(output_data)
-            output_df.to_excel(output_file, index=False)
-            self.console_output.append(f"输出文件已保存: {output_file}")
-
-        driver.quit()
+        self.worker = SeleniumWorker(selected_files, url, output_path, auto_name, manual_filename)
+        self.worker.update_console.connect(self.console_output.append)
+        self.worker.start()
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
