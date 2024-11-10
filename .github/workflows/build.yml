@@ -18,4 +18,21 @@ jobs:
 
       - name: 安装依赖
         run: |
-          python -m
+          python -m pip install --upgrade pip
+          pip install selenium openpyxl pandas pyinstaller
+
+      - name: 将 Catch.py 打包为 EXE
+        run: |
+          pyinstaller --onefile --noconsole Catch.py  # 将 Catch.py 打包为单个 EXE 文件，并隐藏 CMD 窗口
+        shell: cmd
+
+      - name: 存档 EXE 文件
+        run: |
+          mkdir -p dist
+          copy dist\\Catch.exe dist\\Catch.exe
+
+      - name: 上传 EXE 作为构建产物
+        uses: actions/upload-artifact@v3
+        with:
+          name: Catch-exe
+          path: dist/Catch.exe
