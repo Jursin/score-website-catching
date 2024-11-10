@@ -23,7 +23,8 @@ jobs:
 
       - name: 将 Catch.py 打包为 EXE
         run: |
-          pyinstaller --onefile --noconsole Catch.py  # 将 Catch.py 打包为单个 EXE 文件，并隐藏 CMD 窗口
+          # 使用 PyInstaller 将 Catch.py 打包为单个 EXE 文件，并隐藏 CMD 窗口
+          pyinstaller --onefile --noconsole Catch.py
         shell: cmd
 
       - name: 存档 EXE 文件
