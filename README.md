@@ -1,6 +1,32 @@
-# 高中生巅峰之作
-哥们为了开天眼
-扒了学校给的查分网站
-按自己网站改对应参数就行了
-抓取学校查分网站分数
+# 查分网站自动查询脚本
 
+通过自动批量填充输入框自动查询，输出查询结果到 Excel 文件
+
+## Develop
+
+###  Requirements
+
+```bash
+pip install selenium pandas openpyxl pyqt5
+```
+
+> [!tip]
+> **Mirror Source**
+```
+https://pypi.tuna.tsinghua.edu.cn/simple
+```
+
+## Run
+
+运行 `catch.py`
+
+## Step
+- 选择输入文件夹
+- 选择输出文件夹
+- 输入文件名
+- 运行
+
+> [!important]
+> **Website**
+> 
+> 易查分：https://www.yichafen.com/
