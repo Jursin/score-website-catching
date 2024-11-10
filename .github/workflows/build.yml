@@ -9,10 +9,10 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: '3.x'  # 指定Python版本，确保和本地开发环境一致
 
@@ -28,7 +28,7 @@ jobs:
         shell: bash
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: catch-exe
           path: dist/catch.exe  # PyInstaller 默认输出目录为 dist
