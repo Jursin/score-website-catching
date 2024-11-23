@@ -1,6 +1,6 @@
 # 查分网站自动查询脚本
 
-通过自动批量填充输入框自动查询，输出查询结果到 Excel 文件
+通过 `Python` 自动批量填充输入框自动查询，输出查询结果到 Excel 文件
 
 ## Develop
 
@@ -11,7 +11,7 @@ pip install selenium pandas openpyxl pyqt5
 ```
 
 > [!tip]
-> **Mirror Source**
+> **Mirror**
 ```
 https://pypi.tuna.tsinghua.edu.cn/simple
 ```
