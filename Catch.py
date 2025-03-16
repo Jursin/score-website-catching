@@ -126,42 +126,54 @@ class MyApp(QWidget):
             self.console_output.append("没有选择任何文件.")
             return
 
-        output_file = self.output_file_edit.text()
+        output_folder = self.output_file_edit.text()  # 获取用户选择的输出文件夹路径
 
         # 如果没有勾选自动更改文件名，则使用手动输入的文件名
         if not self.auto_name_checkbox.isChecked():
-            output_file = os.path.join(os.path.dirname(output_file), self.manual_filename_edit.text())
+            output_file = os.path.join(output_folder, self.manual_filename_edit.text())
+        else:
+            output_file = output_folder  # 默认输出到用户选择的文件夹
 
         # 显示控制台输出
         self.console_output.append("开始处理...")
 
+        # 初始化 WebDriver
+        driver = self.init_driver()
+        if not driver:
+            return
+
         # 批量处理选中的文件
         for input_file in selected_files:
             self.console_output.append(f"正在处理: {input_file}")
-            self.process_data(input_file, output_file)
+            self.process_data(input_file, output_file, driver)
 
-    def process_data(self, input_file, output_file):
+        driver.quit()
+
+    def init_driver(self):
+        try:
+            driver = webdriver.Edge()
+            return driver
+        except Exception as e:
+            self.console_output.append(f"WebDriver 初始化失败: {e}")
+            return None
+
+    def process_data(self, input_file, output_file, driver):
         # 读取 Excel 文件
         df = pd.read_excel(input_file)
         self.console_output.append(f"读取输入文件: {input_file}")
 
-        # 初始化 WebDriver（假设使用 Chrome）
-        try:
-            driver = webdriver.Edge()
-        except Exception as e:
-            self.console_output.append(f"WebDriver 错误: {e}")
+        # 加载页面
+        if not self.load_page(driver, self.url_edit.text()):
             return
-
-        driver.get(self.url_edit.text())  # 从UI获取网址
 
         # 存储抓取到的数据
         output_data = []
 
         # 循环读取每一行的数据
         for index, row in df.iterrows():
-            data1 = row[1]  # 从 Excel 表格中读取第二列的值
-            data2 = str(row[2])[-4:]  # 从 Excel 表格中读取第三列的后四位
-            
+            data1 = row.iloc[1]  # 从 Excel 表格中读取第二列的值
+            data2 = str(row.iloc[2])[-4:]  # 从 Excel 表格中读取第三列的后四位
+
             try:
                 # 使用显式等待定位输入框，超时设为3秒
                 input1 = WebDriverWait(driver, 3).until(EC.presence_of_element_located((By.NAME, 's_xingming')))
@@ -188,24 +200,40 @@ class MyApp(QWidget):
                 output_data.append([data1, data2] + output_values)
 
             except Exception as e:
-                self.console_output.append(f"Error processing row {index}: {e}")
-                driver.get(self.url_edit.text())  # 错误时重新加载页面
+                self.console_output.append(f"处理第 {index + 1} 行数据时出错: {e}")
+                if not self.load_page(driver, self.url_edit.text()):  # 错误时重新加载页面
+                    return
                 continue
 
-            driver.get(self.url_edit.text())  # 完成后返回原始页面
+            driver.back()  # 返回上一页
 
-        # 在数据抓取完成后生成文件名（第二列第一行的值）
+        # 生成文件名并保存数据
         if output_data:
-            new_filename = str(output_data[0][2]) + "班.xlsx"  # 使用抓取的第二列的值作为文件名
-            output_file = os.path.join(os.path.dirname(output_file), new_filename)
-            self.console_output.append(f"新的输出文件名: {output_file}")
+            try:
+                new_filename = str(output_data[0][2]) + "班.xlsx"  # 使用抓取的第二列的值作为文件名
+                output_folder = os.path.dirname(output_file)
+                if not os.path.exists(output_folder):
+                    os.makedirs(output_folder)  # 创建文件夹
+                output_file = os.path.join(output_folder, new_filename)  # 将文件名拼接到输出路径中
+                self.console_output.append(f"新的输出文件名: {output_file}")
 
-            # 保存输出数据
-            output_df = pd.DataFrame(output_data)
-            output_df.to_excel(output_file, index=False)
-            self.console_output.append(f"输出文件已保存: {output_file}")
+                # 保存输出数据
+                output_df = pd.DataFrame(output_data)
+                output_df.to_excel(output_file, index=False)
+                self.console_output.append(f"输出文件已保存: {output_file}")
+            except PermissionError as e:
+                self.console_output.append(f"保存文件失败: {e}")
+                self.console_output.append("请检查目标文件夹是否存在，并确保程序有写入权限。")
+            except Exception as e:
+                self.console_output.append(f"保存文件时出错: {e}")
 
-        driver.quit()
+    def load_page(self, driver, url):
+        try:
+            driver.get(url)
+            return True
+        except Exception as e:
+            self.console_output.append(f"页面加载失败: {e}")
+            return False
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
